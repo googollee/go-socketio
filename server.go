@@ -3,8 +3,6 @@ package socketio
 import (
 	"net/http"
 
-	"github.com/gomodule/redigo/redis"
-
 	"github.com/googollee/go-socket.io/engineio"
 )
 
@@ -14,29 +12,26 @@ type Server struct {
 
 	handlers *namespaceHandlers
 
-	redisAdapter *RedisAdapterOptions
+	adapterBroadcast Broadcaster
 }
 
 // NewServer returns a server.
-func NewServer(opts *engineio.Options) *Server {
+func NewServer(opts ...engineio.Option) *Server {
 	return &Server{
 		handlers: newNamespaceHandlers(),
-		engine:   engineio.NewServer(opts),
+		engine:   engineio.NewServer(opts...),
 	}
 }
 
-// Adapter sets redis broadcast adapter.
-func (s *Server) Adapter(opts *RedisAdapterOptions) (bool, error) {
-	opts = getOptions(opts)
-	conn, err := redis.Dial(opts.Network, opts.getAddr())
+// Adapter sets broadcast adapter.
+func (s *Server) Adapter(adapter Adapter) error {
+	a, err := adapter.NewAdapter()
 	if err != nil {
-		return false, err
+		return err
 	}
+	s.adapterBroadcast = a
 
-	s.redisAdapter = opts
-
-	conn.Close()
-	return true, nil
+	return nil
 }
 
 // Close closes server.
@@ -220,7 +215,7 @@ func (s *Server) createNamespace(nsp string) *namespaceHandler {
 		nsp = rootNamespace
 	}
 
-	handler := newNamespaceHandler(nsp, s.redisAdapter)
+	handler := newNamespaceHandler(nsp, s.adapterBroadcast)
 	s.handlers.Set(nsp, handler)
 
 	return handler
